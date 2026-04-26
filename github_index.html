@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Finanzas">
+<meta name="theme-color" content="#0f0f13">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<title>Finanzas</title>
+<style>
+  :root {
+    --bg: #0f0f13;
+    --surface: #1a1a22;
+    --surface2: #22222e;
+    --border: rgba(255,255,255,0.08);
+    --text: #f0f0f5;
+    --muted: #8888aa;
+    --accent: #7c6af7;
+    --accent2: #4fd1a5;
+    --danger: #f06070;
+    --warn: #f0a040;
+    --radius: 14px;
+    --radius-sm: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overscroll-behavior: none; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, 'Segoe UI', system-ui, sans-serif; font-size: 16px; min-height: 100vh; }
+
+  /* NAV */
+  nav { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 10; }
+  nav button { flex: 1; background: none; border: none; color: var(--muted); font-size: 11px; font-weight: 600; padding: 14px 4px 12px; cursor: pointer; letter-spacing: 0.01em; transition: color 0.15s; border-bottom: 2px solid transparent; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  nav button .nav-icon { font-size: 20px; }
+  nav button .nav-label { font-size: 10px; }
+  nav button.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
+
+  /* PAGES */
+  .page { display: none; padding: 16px; min-height: calc(100vh - 58px); }
+  .page.active { display: block; }
+
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+
+  /* KPI CARDS */
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .kpi .label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .kpi .value { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+  .kpi .sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .kpi.green .value { color: var(--accent2); }
+  .kpi.red .value { color: var(--danger); }
+  .kpi.purple .value { color: var(--accent); }
+  .kpi.warn .value { color: var(--warn); }
+
+  /* SECTION TITLE */
+  .section-title { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 24px 0 12px; }
+
+  /* FORM */
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 8px; letter-spacing: 0.06em; text-transform: uppercase; }
+  input, select, textarea {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); border-radius: var(--radius-sm); padding: 14px;
+    font-size: 16px; font-family: inherit; outline: none; transition: border 0.15s;
+    -webkit-appearance: none; appearance: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  textarea { resize: none; height: 80px; }
+  select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238888aa' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+  select option { background: #1a1a22; }
+
+  /* BUTTONS */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 15px 22px; border-radius: var(--radius-sm); font-size: 16px; font-weight: 700; cursor: pointer; border: none; transition: opacity 0.15s, transform 0.1s; width: 100%; }
+  .btn:active { transform: scale(0.97); opacity: 0.85; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-green { background: var(--accent2); color: #0a1f18; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); width: auto; padding: 8px 14px; font-size: 13px; font-weight: 600; }
+
+  /* QUICK BTNS */
+  .quick-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .quick-btn { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 16px; cursor: pointer; text-align: left; transition: border-color 0.15s; }
+  .quick-btn:active { border-color: var(--accent); background: var(--surface2); }
+  .quick-btn .icon { font-size: 26px; margin-bottom: 8px; }
+  .quick-btn .title { font-size: 15px; font-weight: 700; }
+  .quick-btn .desc { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+  /* ALERT */
+  .alert { padding: 14px 16px; border-radius: var(--radius-sm); font-size: 14px; margin-top: 14px; display: none; }
+  .alert.ok { background: rgba(79,209,165,0.12); border: 1px solid rgba(79,209,165,0.3); color: var(--accent2); }
+  .alert.err { background: rgba(240,96,112,0.12); border: 1px solid rgba(240,96,112,0.3); color: var(--danger); }
+
+  /* USD CALC */
+  .calc-box { background: var(--surface2); border-radius: var(--radius-sm); padding: 16px; margin-top: 14px; }
+  .calc-row { display: flex; justify-content: space-between; align-items: center; font-size: 15px; color: var(--muted); padding: 5px 0; }
+  .calc-row.total { color: var(--accent2); font-weight: 700; font-size: 20px; border-top: 1px solid var(--border); margin-top: 10px; padding-top: 12px; }
+
+  /* MOVIMIENTOS */
+  .mov-list { display: flex; flex-direction: column; gap: 8px; }
+  .mov-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .mov-left .mov-tipo { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; display: inline-block; margin-bottom: 4px; }
+  .mov-left .mov-cat { font-size: 13px; color: var(--muted); }
+  .mov-right { text-align: right; }
+  .mov-right .mov-monto { font-size: 16px; font-weight: 700; }
+  .mov-right .mov-cuenta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .tipo-ingreso { background: rgba(79,209,165,0.15); color: var(--accent2); }
+  .tipo-gasto { background: rgba(240,96,112,0.15); color: var(--danger); }
+  .tipo-inversion { background: rgba(124,106,247,0.15); color: var(--accent); }
+
+  /* PORTAFOLIO */
+  .activo-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px; display: flex; justify-content: space-between; align-items: center; }
+  .activo-ticker { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: var(--accent); background: rgba(124,106,247,0.12); padding: 3px 10px; border-radius: 4px; }
+  .rend-pos { color: var(--accent2); font-weight: 700; }
+  .rend-neg { color: var(--danger); font-weight: 700; }
+
+  /* LOADING */
+  .loading { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 15px; }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* CONFIG SCREEN */
+  .config-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 32px 24px; text-align: center; }
+  .config-screen h2 { font-size: 22px; font-weight: 700; margin-bottom: 12px; }
+  .config-screen p { font-size: 15px; color: var(--muted); margin-bottom: 24px; line-height: 1.6; }
+  .config-screen input { margin-bottom: 12px; }
+  .config-screen .btn { margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
