@@ -236,53 +236,27 @@ function showPage(page, btn) {
 }
 
 // ============================================================
-//  API: JSONP (evita CORS con Apps Script)
+//  API: proxy via allorigins (evita CORS con Apps Script)
 // ============================================================
 function callBackend(action, params) {
-  return new Promise(function(resolve, reject) {
-    var cbName = 'cb_' + Date.now();
-    var url = WEBAPP_URL + '?action=' + action + '&callback=' + cbName;
-    if (params) {
-      Object.keys(params).forEach(function(k) {
-        url += '&' + k + '=' + encodeURIComponent(params[k]);
-      });
-    }
-    window[cbName] = function(data) {
-      delete window[cbName];
-      var el = document.getElementById('jsonp-' + cbName);
-      if (el) el.remove();
-      resolve(data);
-    };
-    var script = document.createElement('script');
-    script.id = 'jsonp-' + cbName;
-    script.src = url;
-    script.onerror = function() { reject(new Error('Error JSONP')); };
-    document.head.appendChild(script);
-    setTimeout(function() {
-      if (window[cbName]) { delete window[cbName]; reject(new Error('Timeout')); }
-    }, 15000);
-  });
+  var url = WEBAPP_URL + '?action=' + action;
+  if (params) {
+    Object.keys(params).forEach(function(k) {
+      url += '&' + k + '=' + encodeURIComponent(params[k]);
+    });
+  }
+  var proxy = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
+  return fetch(proxy)
+    .then(function(r) { return r.json(); })
+    .then(function(data) { return JSON.parse(data.contents); });
 }
 
 function postBackend(action, body) {
-  return new Promise(function(resolve, reject) {
-    var cbName = 'cb_' + Date.now() + '_p';
-    var url = WEBAPP_URL + '?action=' + action + '&callback=' + cbName + '&data=' + encodeURIComponent(JSON.stringify(body));
-    window[cbName] = function(data) {
-      delete window[cbName];
-      var el = document.getElementById('jsonp-' + cbName);
-      if (el) el.remove();
-      resolve(data);
-    };
-    var script = document.createElement('script');
-    script.id = 'jsonp-' + cbName;
-    script.src = url;
-    script.onerror = function() { reject(new Error('Error JSONP')); };
-    document.head.appendChild(script);
-    setTimeout(function() {
-      if (window[cbName]) { delete window[cbName]; reject(new Error('Timeout')); }
-    }, 15000);
-  });
+  var url = WEBAPP_URL + '?action=' + action + '&data=' + encodeURIComponent(JSON.stringify(body));
+  var proxy = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
+  return fetch(proxy)
+    .then(function(r) { return r.json(); })
+    .then(function(data) { return JSON.parse(data.contents); });
 }
 
 // ============================================================
