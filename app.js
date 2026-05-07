@@ -2,13 +2,18 @@
 //  app.js — Finanzas Personales
 // ============================================================
 
-// Reset URL si viene ?reset en la URL
 if (location.search.includes('reset')) {
   localStorage.removeItem('finanzas_url');
   history.replaceState({}, '', location.pathname);
 }
 
 var WEBAPP_URL = localStorage.getItem('finanzas_url') || '';
+var dolarRates = null;
+var panelMes = null;
+var panelAnio = null;
+var todosMovimientos = [];
+var filtroTipo = '';
+var filtroMes = '';
 
 // ============================================================
 //  INIT
@@ -23,6 +28,7 @@ window.onload = function () {
       fillCuentasOrigen();
       setDefaultDates();
     });
+    loadDolarRates();
   }
 };
 
@@ -138,6 +144,13 @@ function renderApp() {
             <input type="number" id="f-monto" placeholder="0" inputmode="decimal">
           </div>
         </div>
+        <div class="quick-amounts" id="quick-amounts">
+          <button class="quick-amt" onclick="setMonto(1000)">$1k</button>
+          <button class="quick-amt" onclick="setMonto(5000)">$5k</button>
+          <button class="quick-amt" onclick="setMonto(10000)">$10k</button>
+          <button class="quick-amt" onclick="setMonto(50000)">$50k</button>
+          <button class="quick-amt" onclick="setMonto(100000)">$100k</button>
+        </div>
         <div class="form-group">
           <label>Categoría</label>
           <select id="f-categoria"></select>
@@ -156,6 +169,7 @@ function renderApp() {
     </div>
 
     <div id="page-usd" class="page">
+      <div id="dolar-rates-bar" class="dolar-rates-bar" style="display:none"></div>
       <div class="section-title">Registrar compra de dólares</div>
       <div class="card">
         <div class="form-group">
@@ -164,7 +178,7 @@ function renderApp() {
         </div>
         <div class="form-group">
           <label>Tipo de dólar</label>
-          <select id="u-tipo">
+          <select id="u-tipo" onchange="autoFillCotizacion()">
             <option value="BLUE">Blue</option>
             <option value="MEP">MEP</option>
             <option value="CCL">CCL</option>
@@ -177,7 +191,7 @@ function renderApp() {
             <input type="number" id="u-pesos" placeholder="1000000" inputmode="decimal" oninput="calcUSD()">
           </div>
           <div class="form-group" style="margin:0">
-            <label>Cotización</label>
+            <label>Cotización <span id="cot-badge" class="cot-live" style="display:none">EN VIVO</span></label>
             <input type="number" id="u-cotizacion" placeholder="1440" inputmode="decimal" oninput="calcUSD()">
           </div>
         </div>
@@ -233,6 +247,7 @@ function showPage(page, btn) {
   if (btn) btn.classList.add('active');
   if (page === 'panel') loadPanel();
   if (page === 'movimientos') loadMovimientos();
+  if (page === 'usd') { autoFillCotizacion(); renderDolarRatesBar(); }
 }
 
 // ============================================================
@@ -260,15 +275,85 @@ function postBackend(action, body) {
 }
 
 // ============================================================
+//  COTIZACION DOLAR EN TIEMPO REAL
+// ============================================================
+function loadDolarRates() {
+  fetch('https://dolarapi.com/v1/dolares')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      dolarRates = {};
+      data.forEach(function(d) { dolarRates[d.casa] = d; });
+      autoFillCotizacion();
+      renderDolarRatesBar();
+    })
+    .catch(function() {});
+}
+
+var casaMap = { 'BLUE': 'blue', 'MEP': 'bolsa', 'CCL': 'contadoconliqui', 'Oficial': 'oficial' };
+
+function autoFillCotizacion() {
+  if (!dolarRates) return;
+  var tipoEl = document.getElementById('u-tipo');
+  if (!tipoEl) return;
+  var casa = casaMap[tipoEl.value];
+  if (casa && dolarRates[casa]) {
+    var rate = dolarRates[casa];
+    var cotEl = document.getElementById('u-cotizacion');
+    if (cotEl) {
+      cotEl.value = rate.venta || rate.compra;
+      calcUSD();
+    }
+    var badge = document.getElementById('cot-badge');
+    if (badge) badge.style.display = 'inline';
+  }
+}
+
+function renderDolarRatesBar() {
+  if (!dolarRates) return;
+  var bar = document.getElementById('dolar-rates-bar');
+  if (!bar) return;
+  var order = [
+    { key: 'blue', label: 'Blue' },
+    { key: 'bolsa', label: 'MEP' },
+    { key: 'contadoconliqui', label: 'CCL' },
+    { key: 'oficial', label: 'Oficial' }
+  ];
+  var html = order.map(function(item) {
+    var d = dolarRates[item.key];
+    if (!d) return '';
+    return '<div class="rate-item">' +
+      '<div class="rate-label">' + item.label + '</div>' +
+      '<div class="rate-venta">$ ' + Math.round(d.venta || d.compra).toLocaleString('es-AR') + '</div>' +
+      '</div>';
+  }).join('');
+  bar.innerHTML = html;
+  bar.style.display = 'flex';
+}
+
+// ============================================================
 //  PANEL
 // ============================================================
 function loadPanel() {
   var el = document.getElementById('panel-content');
   if (!el) return;
   el.innerHTML = '<div class="loading"><div class="spinner"></div>Cargando datos...</div>';
-  callBackend('getDashboardData')
+  var params = {};
+  if (panelMes !== null) { params.mes = panelMes; params.anio = panelAnio; }
+  callBackend('getDashboardData', params)
     .then(function(d) { renderPanel(d); })
     .catch(function() { el.innerHTML = '<div class="loading" style="color:var(--danger)">Error al conectar. Tocá ⚙️ para cambiar la URL.</div>'; });
+}
+
+function navMes(delta) {
+  var now = new Date();
+  var mes = panelMes !== null ? panelMes : now.getMonth() + 1;
+  var anio = panelAnio !== null ? panelAnio : now.getFullYear();
+  mes += delta;
+  if (mes > 12) { mes = 1; anio++; }
+  if (mes < 1) { mes = 12; anio--; }
+  panelMes = mes;
+  panelAnio = anio;
+  loadPanel();
 }
 
 function fmt(n) {
@@ -278,7 +363,11 @@ function fmt(n) {
 
 function renderPanel(d) {
   var meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  var mesLabel = d.mes ? meses[d.mes] + ' ' + d.anio : 'Último mes';
+  var mes = parseInt(d.mes) || (new Date().getMonth() + 1);
+  var anio = parseInt(d.anio) || new Date().getFullYear();
+  panelMes = mes;
+  panelAnio = anio;
+  var mesLabel = meses[mes] + ' ' + anio;
   var ahorroPct = d.pctAhorro ? (parseFloat(d.pctAhorro) * 100).toFixed(1) + '%' : '0%';
 
   var activosHTML = '';
@@ -307,7 +396,11 @@ function renderPanel(d) {
     '<div class="kpi purple"><div class="label">ARS</div><div class="value">' + fmt(d.patrimonioARS) + '</div></div>' +
     '<div class="kpi warn"><div class="label">USD</div><div class="value">U$S ' + parseFloat(d.patrimonioUSD || 0).toLocaleString('es-AR', {maximumFractionDigits:0}) + '</div></div>' +
     '</div>' +
-    '<div class="section-title">' + mesLabel + '</div>' +
+    '<div class="panel-nav">' +
+    '<button class="panel-nav-btn" onclick="navMes(-1)">&#8592;</button>' +
+    '<div class="panel-mes-label">' + mesLabel + '</div>' +
+    '<button class="panel-nav-btn" onclick="navMes(1)">&#8594;</button>' +
+    '</div>' +
     '<div class="grid3">' +
     '<div class="kpi green"><div class="label">Ingresos</div><div class="value" style="font-size:18px">' + fmt(d.ingresos) + '</div></div>' +
     '<div class="kpi red"><div class="label">Gastos</div><div class="value" style="font-size:18px">' + fmt(d.gastos) + '</div></div>' +
@@ -370,6 +463,11 @@ function setTipo(tipo) {
     (config.cuentas || []).forEach(function(c) { cuentaEl.appendChild(new Option(c, c)); });
     setDefaultDates();
   });
+}
+
+function setMonto(valor) {
+  var el = document.getElementById('f-monto');
+  if (el) el.value = valor;
 }
 
 function resetForm() {
@@ -437,29 +535,106 @@ function loadMovimientos() {
   var el = document.getElementById('movimientos-content');
   if (!el) return;
   el.innerHTML = '<div class="loading"><div class="spinner"></div>Cargando...</div>';
-  callBackend('getUltimosMovimientos', { n: 30 })
+  callBackend('getUltimosMovimientos', { n: 100 })
     .then(function(rows) {
-      if (!rows.length) { el.innerHTML = '<div class="loading">Sin movimientos</div>'; return; }
-      var meses = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-      el.innerHTML = '<div class="section-title">Últimos 30 movimientos</div><div class="mov-list">' +
-        rows.map(function(r) {
-          var d = new Date(r.fecha);
-          var fechaStr = isNaN(d) ? '' : d.getDate() + ' ' + meses[d.getMonth() + 1];
-          var tipo = (r.tipo || '').toLowerCase();
-          var tipoClass = tipo.includes('ingreso') ? 'tipo-ingreso' : tipo.includes('gasto') ? 'tipo-gasto' : 'tipo-inversion';
-          var montoStr = r.moneda === 'USD' ? 'U$S ' + parseFloat(r.monto || 0).toFixed(2) : fmt(r.monto);
-          return '<div class="mov-item">' +
-            '<div class="mov-left">' +
-            '<span class="mov-tipo ' + tipoClass + '">' + (r.tipo || '–') + '</span>' +
-            '<div class="mov-cat">' + (r.obs || r.categoria || '–') + '</div>' +
-            '</div>' +
-            '<div class="mov-right">' +
-            '<div class="mov-monto">' + montoStr + '</div>' +
-            '<div class="mov-cuenta">' + fechaStr + ' · ' + (r.cuenta || '') + '</div>' +
-            '</div></div>';
-        }).join('') + '</div>';
+      todosMovimientos = rows || [];
+      filtroTipo = '';
+      filtroMes = '';
+      renderMovimientos();
     })
     .catch(function() { el.innerHTML = '<div class="loading" style="color:var(--danger)">Error al cargar</div>'; });
+}
+
+function renderMovimientos() {
+  var el = document.getElementById('movimientos-content');
+  if (!el) return;
+
+  var tipos = [
+    { val: '', label: 'Todos' },
+    { val: 'Ingreso', label: 'Ingreso' },
+    { val: 'Gasto', label: 'Gasto' },
+    { val: 'Inversion', label: 'Inversión' },
+    { val: 'Transferencia', label: 'Transf.' }
+  ];
+
+  var filterHTML = '<div class="mov-filters">' +
+    tipos.map(function(t) {
+      var active = filtroTipo === t.val ? 'active' : '';
+      return '<button class="filter-btn ' + active + '" onclick="setFiltroTipo(\'' + t.val + '\')">' + t.label + '</button>';
+    }).join('') + '</div>';
+
+  var mesesUnicos = [];
+  todosMovimientos.forEach(function(r) {
+    if (!r.fecha) return;
+    var d = new Date(r.fecha);
+    if (isNaN(d)) return;
+    var key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    if (mesesUnicos.indexOf(key) === -1) mesesUnicos.push(key);
+  });
+  mesesUnicos.sort().reverse();
+
+  var mesNombres = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  var mesFilterHTML = '';
+  if (mesesUnicos.length > 1) {
+    mesFilterHTML = '<div class="mov-filters" style="margin-top:8px">' +
+      '<button class="filter-btn ' + (filtroMes === '' ? 'active' : '') + '" onclick="setFiltroMes(\'\')">Todos</button>' +
+      mesesUnicos.slice(0, 8).map(function(key) {
+        var parts = key.split('-');
+        var label = mesNombres[parseInt(parts[1])] + ' ' + parts[0];
+        return '<button class="filter-btn ' + (filtroMes === key ? 'active' : '') + '" onclick="setFiltroMes(\'' + key + '\')">' + label + '</button>';
+      }).join('') + '</div>';
+  }
+
+  var rows = todosMovimientos.filter(function(r) {
+    if (filtroTipo) {
+      var t = (r.tipo || '').toLowerCase();
+      var f = filtroTipo.toLowerCase();
+      if (!t.includes(f)) return false;
+    }
+    if (filtroMes) {
+      var d = new Date(r.fecha);
+      if (isNaN(d)) return false;
+      var key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      if (key !== filtroMes) return false;
+    }
+    return true;
+  });
+
+  if (!rows.length) {
+    el.innerHTML = filterHTML + mesFilterHTML + '<div class="loading">Sin movimientos</div>';
+    return;
+  }
+
+  var meses = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  el.innerHTML = filterHTML + mesFilterHTML +
+    '<div class="section-title" style="margin-top:16px">' + rows.length + ' movimientos</div>' +
+    '<div class="mov-list">' +
+    rows.map(function(r) {
+      var d = new Date(r.fecha);
+      var fechaStr = isNaN(d) ? '' : d.getDate() + ' ' + meses[d.getMonth() + 1];
+      var tipo = (r.tipo || '').toLowerCase();
+      var tipoClass = tipo.includes('ingreso') ? 'tipo-ingreso' : tipo.includes('gasto') ? 'tipo-gasto' : 'tipo-inversion';
+      var montoStr = r.moneda === 'USD' ? 'U$S ' + parseFloat(r.monto || 0).toFixed(2) : fmt(r.monto);
+      return '<div class="mov-item">' +
+        '<div class="mov-left">' +
+        '<span class="mov-tipo ' + tipoClass + '">' + (r.tipo || '–') + '</span>' +
+        '<div class="mov-cat">' + (r.obs || r.categoria || '–') + '</div>' +
+        '</div>' +
+        '<div class="mov-right">' +
+        '<div class="mov-monto">' + montoStr + '</div>' +
+        '<div class="mov-cuenta">' + fechaStr + ' · ' + (r.cuenta || '') + '</div>' +
+        '</div></div>';
+    }).join('') + '</div>';
+}
+
+function setFiltroTipo(tipo) {
+  filtroTipo = tipo;
+  renderMovimientos();
+}
+
+function setFiltroMes(mes) {
+  filtroMes = mes;
+  renderMovimientos();
 }
 
 // ============================================================
